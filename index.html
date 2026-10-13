@@ -739,7 +739,7 @@ app.addEventListener("change", e=>{
     let obj; try{ obj=JSON.parse(r.result); }catch(err){ obj=null; }
     if(!obj || (!obj.days && !obj.workouts)){ const m=document.getElementById("exportmsg"); if(m) m.textContent="Tohle není záloha deníku."; return; }
     const res=backend.importAll(obj); render();
-    const m=document.getElementById("exportmsg"); if(m) const pl=(n,a,b2,c)=>n+" "+(n===1?a:(n>=2&&n<=4)?b2:c); m.textContent=`Nahráno: ${pl(res.nd,"den","dny","dní")}, ${pl(res.nw,"trénink","tréninky","tréninků")}. Novější záznamy v telefonu zůstaly beze změny.`;
+    const m=document.getElementById("exportmsg"); const pl=(n,a,b2,c)=>n+" "+(n===1?a:(n>=2&&n<=4)?b2:c); if(m) m.textContent=`Nahráno: ${pl(res.nd,"den","dny","dní")}, ${pl(res.nw,"trénink","tréninky","tréninků")}. Novější záznamy v telefonu zůstaly beze změny.`;
   };
   r.readAsText(f);
 });
