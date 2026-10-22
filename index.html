@@ -7,7 +7,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">
-<title>Kondiční deník</title>
+<meta name="apple-mobile-web-app-title" content="Krantzpower">
+<title>Krantzpower</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -176,7 +177,7 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
 <body>
 <main id="app">
   <div class="stack">
-    <div class="spread"><h1>Kondiční deník</h1><span class="status"><span class="dot off"></span>Načítám…</span></div>
+    <div class="spread"><h1>Krantzpower</h1><span class="status"><span class="dot off"></span>Načítám…</span></div>
     <div class="card"><p class="muted" style="margin:0">Ráno zapíšeš spánek a náladu, večer jídlo a náladu, v posilovně série. Týdenní přehled se poskládá sám.</p></div>
   </div>
 </main>
@@ -418,6 +419,7 @@ function viewToday(){
 }
 
 /* ---------- workout view ---------- */
+const EQUIV=[["rohlík",0.043],["kostka másla",0.25],["plný půllitr piva",0.9],["vánoční kapr",2.5],["cihla",3.2],["kočka",4.5],["zlatá cihla",12.4],["olympijská osa",20],["kettlebell 24 kg",24],["pytel brambor",25],["labrador",32],["sud piva 50 l",62],["pračka",75],["dospělý člověk",80],["hokejový brankář v plné výstroji",110],["prase domácí",120],["sumo zápasník",150],["motorka Jawa 350",155],["gorila",160],["pianino",220],["medvěd hnědý",250],["koncertní křídlo",480],["kůň",500],["Trabant",615],["kráva",650],["žirafa",1200],["Škoda Octavia",1400],["hroch",1500],["nosorožec",2300],["slon africký",6000],["tramvaj Tatra T3",16000],["tank T-72",41500],["modrá velryba",150000]]; function tonnage(w){ let t=0; for(const it of (w.items||[])){ const ex=exById(it.ex); for(const s of it.sets){ const kg=num(s.w), r=num(s.r); if(kg==null||kg<=0) continue; t+= ex.u==="reps" ? kg*(r||0) : kg; } } return t; } function seeded(str){ let h=2166136261; for(const c of str){ h^=c.charCodeAt(0); h=Math.imul(h,16777619); } return ()=>{ h+=0x6D2B79F5; let x=Math.imul(h^(h>>>15),1|h); x^=x+Math.imul(x^(x>>>7),61|x); return ((x^(x>>>14))>>>0)/4294967296; }; } function equivalents(t,seed){ const rnd=seeded(seed); const c=EQUIV.map(([n,kg])=>({n,kg,r:t/kg})).filter(x=>x.r>=0.08&&x.r<=20000); if(c.length<=5) return c; const out=[]; const step=c.length/5; for(let i=0;i<5;i++){ const lo=Math.floor(i*step), hi=Math.max(lo,Math.floor((i+1)*step)-1); out.push(c[lo+Math.floor(rnd()*(hi-lo+1))]); } return out; } function fmtRatio(r){ return r<1? fmt(r,2) : r<10? fmt(r,1) : fmt(Math.round(r),0); } function summaryCard(id){ const w=S.workouts[id]; if(!w||w.status!=="done") return ""; const t=tonnage(w); const eq=t>0? equivalents(t,id) : []; return `<section class="card" style="border-color:var(--accent)"><div class="card-head"><div><div class="eyebrow">Hotovo · ${KIND[w.kind]||"Trénink"}</div><h2>Dnes přemístěno</h2></div><button class="btn ghost small" data-act="closesum" style="min-height:32px;padding:4px 8px">Zavřít</button></div><span class="bignum">${fmt(Math.round(t),0)}<small>kg</small></span>${eq.length?`<div class="muted small">To je zhruba:</div><ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px">${eq.map(x=>`<li><b class="num">${fmtRatio(x.r)} ×</b> ${esc(x.n)}</li>`).join("")}</ul>`:`<p class="muted small" style="margin:0">Dnes jen s vlastní vahou, tak se nepočítá.</p>`}<p class="muted small" style="margin:0">Součet váha × opakování přes všechny série.</p></section>`; } 
 function viewWorkout(){
   const a=activeWorkout();
   if(a) return viewActive(a);
@@ -432,12 +434,12 @@ function viewWorkout(){
   </section>`;
   const hist = done.length? `<section class="card"><h2>Poslední tréninky</h2>${done.slice(0,12).map(w=>histItem(w)).join("")}</section>`
     : `<section class="card"><h2>Zatím žádný trénink</h2><p class="muted" style="margin:0">Po prvním tréninku tu uvidíš historii a u každého cviku hodnoty z minula.</p></section>`;
-  return start+hist;
+  return (S.justDone?summaryCard(S.justDone):"")+start+hist;
 }
 function histItem(w){
   const items=(w.items||[]).filter(i=>i.sets.some(s=>num(s.r)!=null));
   const sets=items.reduce((n,i)=>n+i.sets.filter(s=>num(s.r)!=null).length,0);
-  return `<details class="hist"><summary class="spread"><span><span class="tag ${w.kind==="kb"?"kb":"gym"}">${KIND[w.kind]||"Trénink"}</span> <b>${wd(w.date)} ${short(w.date)}</b></span><span class="muted small num">${items.length} cviků · ${sets} sérií</span></summary>
+  return `<details class="hist"><summary class="spread"><span><span class="tag ${w.kind==="kb"?"kb":"gym"}">${KIND[w.kind]||"Trénink"}</span> <b>${wd(w.date)} ${short(w.date)}</b></span><span class="muted small num">${items.length} cviků · ${sets} sérií · ${fmt(Math.round(tonnage(w)),0)} kg</span></summary>
     <div class="stack" style="gap:6px;margin-top:8px">${items.map(i=>{const ex=exById(i.ex);return `<div class="histline"><b style="color:var(--ink)">${esc(ex.n)}</b> ${i.sets.map(s=>setLabel(ex,s)).filter(Boolean).join(" · ")}</div>`;}).join("")}
     ${w.note?`<div class="histline">${esc(w.note)}</div>`:""}
     <div class="confirm"><button class="btn ghost small" data-act="reopen" data-id="${w.id}">Upravit</button></div></div></details>`;
@@ -627,7 +629,7 @@ function saveWorkout(w){ rendered.workout=null; scheduleWrite("workouts/"+w.id, 
 function startWorkout(kind, items){
   const w={id:newId(), kind, date:today(), status:"active", startedAt:new Date().toISOString(), items:items||[], note:""};
   if(!items && kind==="kb") w.items=allEx().filter(e=>e.g==="kb").map(e=>({ex:e.id, sets:[{w:null,r:null,done:false}]}));
-  S.workouts[w.id]=w; S.picker=!w.items.length; saveWorkout(w); render();
+  S.workouts[w.id]=w; S.justDone=null; S.picker=!w.items.length; saveWorkout(w); render();
 }
 
 /* ---------- events ---------- */
@@ -669,10 +671,11 @@ app.addEventListener("click", async e=>{
     case "addset": if(w){ const it=w.items[Number(b.dataset.i)]; const last=it.sets[it.sets.length-1]||{}; it.sets.push({w:last.w??null, r:last.r??null, done:false}); saveWorkout(w); render(); } break;
     case "rmset": if(w){ const it=w.items[Number(b.dataset.i)]; it.sets.splice(Number(b.dataset.j),1); if(!it.sets.length) it.sets.push({w:null,r:null,done:false}); saveWorkout(w); render(); } break;
     case "check": if(w){ const s=w.items[Number(b.dataset.i)].sets[Number(b.dataset.j)]; s.done=!s.done; saveWorkout(w); const y=window.scrollY; render(); window.scrollTo(0,y); if(s.done) startRest(restLen); } break;
-    case "finish": if(w){ w.status="done"; w.endedAt=w.endedAt||new Date().toISOString(); w.items=w.items.map(it=>({ex:it.ex, sets:it.sets.filter(s=>num(s.r)!=null||num(s.w)!=null)})).filter(it=>it.sets.length); S.picker=false; stopRest(); saveWorkout(w); render(); window.scrollTo(0,0);} break;
+    case "finish": if(w){ w.status="done"; w.endedAt=w.endedAt||new Date().toISOString(); w.items=w.items.map(it=>({ex:it.ex, sets:it.sets.filter(s=>num(s.r)!=null||num(s.w)!=null)})).filter(it=>it.sets.length); S.picker=false; S.justDone=w.id; stopRest(); saveWorkout(w); render(); window.scrollTo(0,0);} break;
     case "discard1": S.discardArm=true; render(); break;
     case "discard0": S.discardArm=false; render(); break;
     case "discard2": if(w){ delete S.workouts[w.id]; S.discardArm=false; stopRest(); saveWorkout({id:w.id}); render(); } break;
+    case "closesum": S.justDone=null; render(); break;
     case "export": doExport(); break;
   }
 });
@@ -724,9 +727,9 @@ document.addEventListener("visibilitychange", manageWakeLock);
 function doExport(){
   const msg=document.getElementById("exportmsg");
   try{
-    const data=JSON.stringify({app:"kondicni-denik", exported:new Date().toISOString(), days:S.days, workouts:S.workouts, customExercises:S.custom}, null, 2);
+    const data=JSON.stringify({app:"krantzpower", exported:new Date().toISOString(), days:S.days, workouts:S.workouts, customExercises:S.custom}, null, 2);
     const url=URL.createObjectURL(new Blob([data],{type:"application/json"}));
-    const a=document.createElement("a"); a.href=url; a.download="kondicni-denik-"+today()+".json"; document.body.appendChild(a); a.click(); a.remove();
+    const a=document.createElement("a"); a.href=url; a.download="krantzpower-"+today()+".json"; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(url), 4000);
     try{ localStorage.setItem("kondicni-denik-backup", new Date().toISOString()); }catch(e){}
     if(msg) msg.textContent="Záloha se stahuje do složky Stažené.";

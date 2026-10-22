@@ -1,4 +1,4 @@
-# Kondiční deník
+# Krantzpower
 
 Osobní deník spánku, nálady, jídla a tréninků. Jedna HTML stránka, funguje offline a dá se nainstalovat na plochu telefonu.
 

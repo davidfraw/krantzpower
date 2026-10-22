@@ -1,5 +1,5 @@
-// Kondiční deník: offline cache. Data stay in localStorage, never in this cache.
-const CACHE = "kondicni-denik-v1";
+// Krantzpower: offline cache. Data stay in localStorage, never in this cache.
+const CACHE = "krantzpower-v2";
 const ASSETS = ["./", "index.html", "manifest.json", "icon.svg"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
