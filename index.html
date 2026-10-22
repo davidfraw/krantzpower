@@ -113,6 +113,7 @@ textarea{min-height:64px;resize:vertical}
 .set .x{border:0;background:transparent;color:var(--muted);font-size:18px;height:44px}
 .set-head{display:grid;grid-template-columns:22px 1fr 1fr 44px 34px;gap:6px;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;text-align:center}
 .prev{font-size:12.5px;color:var(--muted)}
+.rosen{background:var(--kb-soft);color:var(--ink);border-radius:9px;padding:8px 11px;font-size:14px}
 .pr{font-size:11px;font-weight:700;color:var(--kb);text-transform:uppercase;letter-spacing:.06em}
 .picker{display:flex;flex-direction:column;gap:10px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
@@ -214,7 +215,7 @@ const KIND = {gym:"Posilovna", kb:"Kettlebelly"};
 
 /* ---------- state ---------- */
 const S = {
-  days:{}, workouts:{}, custom:[],
+  days:{}, workouts:{}, summaries:{}, custom:[],
   mode:"loading", saveState:"idle",
   tab:"today", date:iso(new Date()), week:mondayOf(iso(new Date())),
   progEx:null, picker:false, discardArm:false,
@@ -299,7 +300,7 @@ function localBackend(){
   const KEY="kondicni-denik-v1"; let data={days:{},workouts:{},config:{}};
   try{ const raw=localStorage.getItem(KEY); if(raw) data=Object.assign(data, JSON.parse(raw)); }catch(e){}
   const save=()=>{ try{ localStorage.setItem(KEY, JSON.stringify(data)); return true; }catch(e){ return false; } };
-  const apply=()=>{ onDays(Object.assign({},data.days)); onWorkouts(Object.assign({},data.workouts)); onConfig(data.config.exercises||null); };
+  const apply=()=>{ onDays(Object.assign({},data.days)); onWorkouts(Object.assign({},data.workouts)); onSummaries(Object.assign({},data.summaries||{})); onConfig(data.config.exercises||null); };
   setTimeout(apply,0);
   return {
     async set(path, body){ const [c,id]=path.split("/"); (data[c]||(data[c]={}))[id]=JSON.parse(JSON.stringify(body)); if(!save()) throw new Error("storage"); },
@@ -308,6 +309,7 @@ function localBackend(){
       let nd=0, nw=0;
       for(const [k,v] of Object.entries(obj.days||{})){ if(!/^\d{4}-\d{2}-\d{2}$/.test(k)||!v||typeof v!=="object") continue; const cur=data.days[k]; if(!cur || (v.updatedAt||"")>(cur.updatedAt||"")){ data.days[k]=v; nd++; } }
       for(const [k,v] of Object.entries(obj.workouts||{})){ if(!v||typeof v!=="object"||!Array.isArray(v.items)) continue; if(!data.workouts[k]){ data.workouts[k]=v; nw++; } }
+      for(const [k,v] of Object.entries(obj.summaries||{})){ if(!v||typeof v!=='object') continue; data.summaries=data.summaries||{}; if(!data.summaries[k]) data.summaries[k]=v; }
       if(Array.isArray(obj.customExercises)){ const have=new Set(((data.config.exercises||{}).custom||[]).map(e=>e.id)); const add=obj.customExercises.filter(e=>e&&e.id&&!have.has(e.id)); data.config.exercises={custom:((data.config.exercises||{}).custom||[]).concat(add)}; }
       save(); apply(); return {nd, nw};
     },
@@ -327,6 +329,7 @@ function onWorkouts(o){
   for(const k of Object.keys(S.workouts)) if(isPending("workouts/"+k)) next[k]=S.workouts[k];
   S.workouts=next; refresh("workouts");
 }
+function onSummaries(o){ const next={}; for(const [k,v] of Object.entries(o)) next[k]=clone(v); for(const k of Object.keys(S.summaries)) if(isPending("summaries/"+k)) next[k]=S.summaries[k]; S.summaries=next; }
 function onConfig(c){ if(isPending("config/exercises")) return; S.custom = (c&&Array.isArray(c.custom))? clone(c.custom) : []; refresh("config"); }
 
 let readyMarked=false;
@@ -419,7 +422,7 @@ function viewToday(){
 }
 
 /* ---------- workout view ---------- */
-const EQUIV=[["rohlík",0.043],["kostka másla",0.25],["plný půllitr piva",0.9],["vánoční kapr",2.5],["cihla",3.2],["kočka",4.5],["zlatá cihla",12.4],["olympijská osa",20],["kettlebell 24 kg",24],["pytel brambor",25],["labrador",32],["sud piva 50 l",62],["pračka",75],["dospělý člověk",80],["hokejový brankář v plné výstroji",110],["prase domácí",120],["sumo zápasník",150],["motorka Jawa 350",155],["gorila",160],["pianino",220],["medvěd hnědý",250],["koncertní křídlo",480],["kůň",500],["Trabant",615],["kráva",650],["žirafa",1200],["Škoda Octavia",1400],["hroch",1500],["nosorožec",2300],["slon africký",6000],["tramvaj Tatra T3",16000],["tank T-72",41500],["modrá velryba",150000]]; function tonnage(w){ let t=0; for(const it of (w.items||[])){ const ex=exById(it.ex); for(const s of it.sets){ const kg=num(s.w), r=num(s.r); if(kg==null||kg<=0) continue; t+= ex.u==="reps" ? kg*(r||0) : kg; } } return t; } function seeded(str){ let h=2166136261; for(const c of str){ h^=c.charCodeAt(0); h=Math.imul(h,16777619); } return ()=>{ h+=0x6D2B79F5; let x=Math.imul(h^(h>>>15),1|h); x^=x+Math.imul(x^(x>>>7),61|x); return ((x^(x>>>14))>>>0)/4294967296; }; } function equivalents(t,seed){ const rnd=seeded(seed); const c=EQUIV.map(([n,kg])=>({n,kg,r:t/kg})).filter(x=>x.r>=0.08&&x.r<=20000); if(c.length<=5) return c; const out=[]; const step=c.length/5; for(let i=0;i<5;i++){ const lo=Math.floor(i*step), hi=Math.max(lo,Math.floor((i+1)*step)-1); out.push(c[lo+Math.floor(rnd()*(hi-lo+1))]); } return out; } function fmtRatio(r){ return r<1? fmt(r,2) : r<10? fmt(r,1) : fmt(Math.round(r),0); } function summaryCard(id){ const w=S.workouts[id]; if(!w||w.status!=="done") return ""; const t=tonnage(w); const eq=t>0? equivalents(t,id) : []; return `<section class="card" style="border-color:var(--accent)"><div class="card-head"><div><div class="eyebrow">Hotovo · ${KIND[w.kind]||"Trénink"}</div><h2>Dnes přemístěno</h2></div><button class="btn ghost small" data-act="closesum" style="min-height:32px;padding:4px 8px">Zavřít</button></div><span class="bignum">${fmt(Math.round(t),0)}<small>kg</small></span>${eq.length?`<div class="muted small">To je zhruba:</div><ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px">${eq.map(x=>`<li><b class="num">${fmtRatio(x.r)} ×</b> ${esc(x.n)}</li>`).join("")}</ul>`:`<p class="muted small" style="margin:0">Dnes jen s vlastní vahou, tak se nepočítá.</p>`}<p class="muted small" style="margin:0">Součet váha × opakování přes všechny série.</p></section>`; } 
+const EQUIV=[["rohlík",0.043],["kostka másla",0.25],["plný půllitr piva",0.9],["vánoční kapr",2.5],["cihla",3.2],["kočka",4.5],["zlatá cihla",12.4],["olympijská osa",20],["kettlebell 24 kg",24],["pytel brambor",25],["labrador",32],["sud piva 50 l",62],["pračka",75],["dospělý člověk",80],["hokejový brankář v plné výstroji",110],["prase domácí",120],["sumo zápasník",150],["motorka Jawa 350",155],["gorila",160],["pianino",220],["medvěd hnědý",250],["koncertní křídlo",480],["kůň",500],["Trabant",615],["kráva",650],["žirafa",1200],["Škoda Octavia",1400],["hroch",1500],["nosorožec",2300],["slon africký",6000],["tramvaj Tatra T3",16000],["tank T-72",41500],["modrá velryba",150000]]; function tonnage(w){ let t=0; for(const it of (w.items||[])){ const ex=exById(it.ex); for(const s of it.sets){ const kg=num(s.w), r=num(s.r); if(kg==null||kg<=0) continue; t+= ex.u==="reps" ? kg*(r||0) : kg; } } return t; } function seeded(str){ let h=2166136261; for(const c of str){ h^=c.charCodeAt(0); h=Math.imul(h,16777619); } return ()=>{ h+=0x6D2B79F5; let x=Math.imul(h^(h>>>15),1|h); x^=x+Math.imul(x^(x>>>7),61|x); return ((x^(x>>>14))>>>0)/4294967296; }; } function equivalents(t,seed){ const rnd=seeded(seed); const c=EQUIV.map(([n,kg])=>({n,kg,r:t/kg})).filter(x=>x.r>=0.08&&x.r<=20000); if(c.length<=5) return c; const out=[]; const step=c.length/5; for(let i=0;i<5;i++){ const lo=Math.floor(i*step), hi=Math.max(lo,Math.floor((i+1)*step)-1); out.push(c[lo+Math.floor(rnd()*(hi-lo+1))]); } return out; } function fmtRatio(r){ return r<1? fmt(r,2) : r<10? fmt(r,1) : fmt(Math.round(r),0); } const ROSEN_KG=6.5; const ROSEN_SAYS=["Rosenkrantz ti fandí","Rosenkrantz je zklamaný","Rosenkrantz vrní","Rosenkrantz tě miluje","Rosenkrantz chce víc"]; function buildSummary(w){ const t=tonnage(w); const rnd=seeded(w.id+"r"); return {id:w.id, date:w.date, kind:w.kind, kg:Math.round(t), equiv:(t>0?equivalents(t,w.id):[]).map(x=>({n:x.n,r:Math.round(x.r*100)/100})), rosen:Math.round(t/ROSEN_KG*10)/10, says:ROSEN_SAYS[Math.floor(rnd()*ROSEN_SAYS.length)], createdAt:new Date().toISOString()}; } function saveSummary(w){ const sm=buildSummary(w); S.summaries[w.id]=sm; scheduleWrite("summaries/"+w.id, ()=>S.summaries[w.id]||null, 50); return sm; } function rosenLine(sm){ return `<div class="rosen"><b class="num">${fmtRatio(sm.rosen)} ×</b> Rosenkrantz <span class="muted small">(${fmt(ROSEN_KG)} kg)</span> · <i>${esc(sm.says)}</i></div>`; } function summaryCard(id){ const w=S.workouts[id]; if(!w||w.status!=="done") return ""; const sm=S.summaries[id]||saveSummary(w); return `<section class="card" style="border-color:var(--accent)"><div class="card-head"><div><div class="eyebrow">Hotovo · ${KIND[w.kind]||"Trénink"}</div><h2>Dnes přemístěno</h2></div><button class="btn ghost small" data-act="closesum" style="min-height:32px;padding:4px 8px">Zavřít</button></div><span class="bignum">${fmt(sm.kg,0)}<small>kg</small></span>${rosenLine(sm)}${sm.equiv.length?`<div class="muted small">A taky zhruba:</div><ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px">${sm.equiv.map(x=>`<li><b class="num">${fmtRatio(x.r)} ×</b> ${esc(x.n)}</li>`).join("")}</ul>`:`<p class="muted small" style="margin:0">Dnes jen s vlastní vahou, tak se nepočítá.</p>`}<p class="muted small" style="margin:0">Součet váha × opakování přes všechny série. Shrnutí najdeš i v Pokroku.</p></section>`; } function summariesSection(){ const list=Object.values(S.summaries).sort((a,b)=>(b.date+(b.createdAt||"")).localeCompare(a.date+(a.createdAt||""))); if(!list.length) return ""; const total=list.reduce((n,x)=>n+(x.kg||0),0); return `<section class="card"><div class="card-head"><h2>Přemístěno</h2><span class="muted small num">celkem ${fmt(total,0)} kg · ${fmtRatio(total/ROSEN_KG)} × Rosenkrantz</span></div>${list.map(sm=>`<details class="hist"><summary class="spread"><span><span class="tag ${sm.kind==="kb"?"kb":"gym"}">${KIND[sm.kind]||"Trénink"}</span> <b>${wd(sm.date)} ${short(sm.date)}</b></span><span class="num"><b>${fmt(sm.kg,0)} kg</b></span></summary><div class="stack" style="gap:6px;margin-top:8px">${rosenLine(sm)}${sm.equiv.length?`<ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px" class="small">${sm.equiv.map(x=>`<li><b class="num">${fmtRatio(x.r)} ×</b> ${esc(x.n)}</li>`).join("")}</ul>`:""}</div></details>`).join("")}</section>`; } 
 function viewWorkout(){
   const a=activeWorkout();
   if(a) return viewActive(a);
@@ -596,7 +599,7 @@ function viewProgress(){
   const spts=Object.values(S.days).filter(d=>num(d.waist)!=null).sort((a,b)=>a.date.localeCompare(b.date));
   const waistSec = spts.length? `<section class="card"><h2>Pas</h2><table class="t"><tbody>${spts.slice(-6).reverse().map(d=>`<tr><td>${wd(d.date)} ${short(d.date)}</td><td class="r">${fmt(num(d.waist))} cm</td></tr>`).join("")}</tbody></table></section>`:"";
   const exportSec = backupCard("data");
-  return exSection+weightSec+waistSec+exportSec;
+  return summariesSection()+exSection+weightSec+waistSec+exportSec;
 }
 
 /* ---------- chart ---------- */
@@ -671,10 +674,10 @@ app.addEventListener("click", async e=>{
     case "addset": if(w){ const it=w.items[Number(b.dataset.i)]; const last=it.sets[it.sets.length-1]||{}; it.sets.push({w:last.w??null, r:last.r??null, done:false}); saveWorkout(w); render(); } break;
     case "rmset": if(w){ const it=w.items[Number(b.dataset.i)]; it.sets.splice(Number(b.dataset.j),1); if(!it.sets.length) it.sets.push({w:null,r:null,done:false}); saveWorkout(w); render(); } break;
     case "check": if(w){ const s=w.items[Number(b.dataset.i)].sets[Number(b.dataset.j)]; s.done=!s.done; saveWorkout(w); const y=window.scrollY; render(); window.scrollTo(0,y); if(s.done) startRest(restLen); } break;
-    case "finish": if(w){ w.status="done"; w.endedAt=w.endedAt||new Date().toISOString(); w.items=w.items.map(it=>({ex:it.ex, sets:it.sets.filter(s=>num(s.r)!=null||num(s.w)!=null)})).filter(it=>it.sets.length); S.picker=false; S.justDone=w.id; stopRest(); saveWorkout(w); render(); window.scrollTo(0,0);} break;
+    case "finish": if(w){ w.status="done"; w.endedAt=w.endedAt||new Date().toISOString(); w.items=w.items.map(it=>({ex:it.ex, sets:it.sets.filter(s=>num(s.r)!=null||num(s.w)!=null)})).filter(it=>it.sets.length); S.picker=false; S.justDone=w.id; stopRest(); saveWorkout(w); saveSummary(w); render(); window.scrollTo(0,0);} break;
     case "discard1": S.discardArm=true; render(); break;
     case "discard0": S.discardArm=false; render(); break;
-    case "discard2": if(w){ delete S.workouts[w.id]; S.discardArm=false; stopRest(); saveWorkout({id:w.id}); render(); } break;
+    case "discard2": if(w){ delete S.workouts[w.id]; if(S.summaries[w.id]){ delete S.summaries[w.id]; scheduleWrite("summaries/"+w.id, ()=>null, 50); } S.discardArm=false; stopRest(); saveWorkout({id:w.id}); render(); } break;
     case "closesum": S.justDone=null; render(); break;
     case "export": doExport(); break;
   }
@@ -727,7 +730,7 @@ document.addEventListener("visibilitychange", manageWakeLock);
 function doExport(){
   const msg=document.getElementById("exportmsg");
   try{
-    const data=JSON.stringify({app:"krantzpower", exported:new Date().toISOString(), days:S.days, workouts:S.workouts, customExercises:S.custom}, null, 2);
+    const data=JSON.stringify({app:"krantzpower", exported:new Date().toISOString(), days:S.days, workouts:S.workouts, summaries:S.summaries, customExercises:S.custom}, null, 2);
     const url=URL.createObjectURL(new Blob([data],{type:"application/json"}));
     const a=document.createElement("a"); a.href=url; a.download="krantzpower-"+today()+".json"; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(url), 4000);
